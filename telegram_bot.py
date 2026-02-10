@@ -67,7 +67,8 @@ def start_bot():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set up the webhook (ensure to replace <your-app-url> with your actual deployed URL)
-    application.bot.set_webhook(url=f'https://aydinai.onrender.com/{TELEGRAM_API_TOKEN}')
+
+await   application.bot.set_webhook(url=f'https://aydinai.onrender.com/{TELEGRAM_API_TOKEN}')
     
     # Start the Flask app (to handle the webhook)
     app.run(host="0.0.0.0", port=80)
