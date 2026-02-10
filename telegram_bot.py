@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CallbackContext
 from flask import Flask, request
 
-# Replace with your actual Telegram Bot API Token and Mistral API Key
+# Your actual Telegram Bot API Token and Mistral API Key
 TELEGRAM_API_TOKEN = '8561743954:AAFD1u3JHW58iAKEJENQE2DR8MMlfotnoSs'  # Your Telegram bot token
 MISTRAL_API_KEY = 'MewX6VX5JOJWQsopXkE6mr2PSgfMQTV3'  # Your Mistral API key
 
@@ -66,8 +66,8 @@ def start_bot():
     # Add message handler
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Set up the webhook
-    application.bot.set_webhook(url=f'https://<your-app-url>/{TELEGRAM_API_TOKEN}')
+    # Set up the webhook (ensure to replace <your-app-url> with your actual deployed URL)
+    application.bot.set_webhook(url=f'https://aydinai.onrender.com/{TELEGRAM_API_TOKEN}')
     
     # Start the Flask app (to handle the webhook)
     app.run(host="0.0.0.0", port=80)
