@@ -72,5 +72,8 @@ async def start_bot():
     # Start the Flask app (to handle the webhook)
     app.run(host="0.0.0.0", port=80)  # This should be correctly indented now
 
+# Main entry point to run the bot
 if __name__ == '__main__':
-    start_bot()  # Run the bot
+    import asyncio
+    # Run the bot inside an asyncio event loop
+    asyncio.run(start_bot())
