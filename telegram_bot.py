@@ -4,9 +4,9 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CallbackContext
 from flask import Flask, request
 
-# Your actual Telegram Bot API Token and Mistral API Key
-TELEGRAM_API_TOKEN = '8561743954:AAFD1u3JHW58iAKEJENQE2DR8MMlfotnoSs'  # Your Telegram bot token
-MISTRAL_API_KEY = 'MewX6VX5JOJWQsopXkE6mr2PSgfMQTV3'  # Your Mistral API key
+# Use the environment variable for the Telegram API Token
+TELEGRAM_API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')  # Securely access the API key from environment variables
+MISTRAL_API_KEY = 'MewX6VX5JOJWQsopXkE6mr2PSgfMQTV3'  # Your Mistral API key (you can also store it in an env var)
 
 # Mistral Model API URL (generic endpoint for Mistral)
 MISTRAL_API_URL = "https://api.mistral.ai/v1/generate"  # Replace with Mistral's API endpoint if different
@@ -59,7 +59,7 @@ def webhook():
     return 'OK', 200
 
 # Function to start the Telegram bot
-def start_bot():
+async def start_bot():
     # Create the Application instance (Updated for v20+)
     application = Application.builder().token(TELEGRAM_API_TOKEN).build()
 
@@ -67,11 +67,10 @@ def start_bot():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Set up the webhook (ensure to replace <your-app-url> with your actual deployed URL)
-
-await   application.bot.set_webhook(url=f'https://aydinai.onrender.com/{TELEGRAM_API_TOKEN}')
+    await application.bot.set_webhook(url=f'https://aydinai.onrender.com/{TELEGRAM_API_TOKEN}')
     
     # Start the Flask app (to handle the webhook)
-    app.run(host="0.0.0.0", port=80)
+    app.run(host="0.0.0.0", port=80)  # This should be correctly indented now
 
 if __name__ == '__main__':
     start_bot()  # Run the bot
