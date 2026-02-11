@@ -8,14 +8,18 @@ from telegram.ext import Application, MessageHandler, ContextTypes, filters
 TELEGRAM_API_TOKEN = os.getenv("TELEGRAM_API_TOKEN")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-RENDER_URL = "https://aydinai.onrender.com"  # change if your URL changes
+RENDER_URL = "https://aydinai.onrender.com"
 
 app = Flask(__name__)
 telegram_app = Application.builder().token(TELEGRAM_API_TOKEN).build()
 
+# ===== MEMORY STORAGE (per user) =====
+user_memory = {}
 
-# ===== MISTRAL =====
-def query_mistral(prompt):
+MAX_HISTORY = 10  # Keep last 10 exchanges
+
+
+def query_mistral(messages):
     url = "https://api.mistral.ai/v1/chat/completions"
 
     headers = {
@@ -25,7 +29,7 @@ def query_mistral(prompt):
 
     data = {
         "model": "mistral-small",
-        "messages": [{"role": "user", "content": prompt}]
+        "messages": messages
     }
 
     response = requests.post(url, headers=headers, json=data)
@@ -36,10 +40,29 @@ def query_mistral(prompt):
     return "AI error."
 
 
-# ===== TELEGRAM HANDLER =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
     user_text = update.message.text
-    reply = query_mistral(user_text)
+
+    # Create memory if new user
+    if user_id not in user_memory:
+        user_memory[user_id] = [
+            {"role": "system", "content": "You are a helpful AI assistant."}
+        ]
+
+    # Add user message
+    user_memory[user_id].append({"role": "user", "content": user_text})
+
+    # Trim memory
+    if len(user_memory[user_id]) > MAX_HISTORY * 2:
+        user_memory[user_id] = user_memory[user_id][-MAX_HISTORY*2:]
+
+    # Get AI reply
+    reply = query_mistral(user_memory[user_id])
+
+    # Save assistant reply
+    user_memory[user_id].append({"role": "assistant", "content": reply})
+
     await update.message.reply_text(reply)
 
 
@@ -48,7 +71,6 @@ telegram_app.add_handler(
 )
 
 
-# ===== WEBHOOK ROUTE =====
 @app.route(f"/{TELEGRAM_API_TOKEN}", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), telegram_app.bot)
@@ -61,7 +83,6 @@ def home():
     return "Bot is running."
 
 
-# ===== STARTUP =====
 if __name__ == "__main__":
     async def setup():
         await telegram_app.initialize()
@@ -71,6 +92,5 @@ if __name__ == "__main__":
 
     asyncio.run(setup())
 
-    # IMPORTANT: Render expects PORT env variable
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
