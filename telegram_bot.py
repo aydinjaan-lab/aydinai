@@ -3,8 +3,8 @@ import requests
 from telegram import Update
 from telegram.ext import Application, MessageHandler, ContextTypes, filters
 
-TELEGRAM_API_TOKEN = os.getenv("8561743954:AAFD1u3JHW58iAKEJENQE2DR8MMlfotnoSs")
-MISTRAL_API_KEY = os.getenv("MewX6VX5JOJWQsopXkE6mr2PSgfMQTV3")
+TELEGRAM_API_TOKEN = os.getenv("TELEGRAM_API_TOKEN")
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
 def query_mistral(prompt):
     url = "https://api.mistral.ai/v1/chat/completions"
