@@ -1,79 +1,49 @@
-import requests
 import os
+import requests
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, CallbackContext
-from flask import Flask, request
+from telegram.ext import Application, MessageHandler, ContextTypes, filters
 
-# Use the environment variable for the Telegram API Token
-TELEGRAM_API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')  # Securely access the API key from environment variables
-MISTRAL_API_KEY = 'MewX6VX5JOJWQsopXkE6mr2PSgfMQTV3'  # Your Mistral API key (you can also store it in an env var)
+# === ENV VARIABLES ===
+TELEGRAM_API_TOKEN = os.getenv("8561743954:AAFD1u3JHW58iAKEJENQE2DR8MMlfotnoSs")
+MISTRAL_API_KEY = os.getenv("MewX6VX5JOJWQsopXkE6mr2PSgfMQTV3")
 
-# Mistral Model API URL (generic endpoint for Mistral)
-MISTRAL_API_URL = "https://api.mistral.ai/v1/generate"  # Replace with Mistral's API endpoint if different
+# === MISTRAL API CALL ===
+def query_mistral(prompt):
+    url = "https://api.mistral.ai/v1/chat/completions"
 
-# Flask app for handling the webhook
-app = Flask(__name__)
-
-# Function to query the Mistral API
-def query_mistral_model(prompt):
     headers = {
         "Authorization": f"Bearer {MISTRAL_API_KEY}",
         "Content-Type": "application/json"
     }
-    
-    # Define the payload to send to Mistral
+
     data = {
-        "input": prompt  # Send the user query as input to Mistral
+        "model": "mistral-small",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
     }
 
-    # Send POST request to Mistral API
-    response = requests.post(MISTRAL_API_URL, headers=headers, json=data)
-    
+    response = requests.post(url, headers=headers, json=data)
+
     if response.status_code == 200:
-        # Parse the response from Mistral
-        ai_response = response.json().get('generated_text', 'Sorry, I couldn\'t generate a response.')
-        return ai_response
+        return response.json()["choices"][0]["message"]["content"]
     else:
-        return "There was an error connecting to Mistral. Please try again later."
+        return "Error contacting Mistral API."
 
-# Function to handle incoming messages from the user
-async def handle_message(update: Update, context: CallbackContext):
-    user_message = update.message.text  # Get the message from the user
-    
-    # Query Mistral API with the user's message
-    ai_response = query_mistral_model(user_message)
-    
-    # Send the response back to the user
-    await update.message.reply_text(ai_response)
+# === TELEGRAM HANDLER ===
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
+    reply = query_mistral(user_text)
+    await update.message.reply_text(reply)
 
-# Set up a webhook endpoint
-@app.route(f'/{TELEGRAM_API_TOKEN}', methods=['POST'])
-def webhook():
-    # Get the incoming update from Telegram
-    json_str = request.get_data().decode('UTF-8')
-    update = Update.de_json(json_str, application.bot)
+# === MAIN ===
+def main():
+    app = Application.builder().token(TELEGRAM_API_TOKEN).build()
 
-    # Handle the incoming update (message)
-    application.process_update(update)
-    
-    return 'OK', 200
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# Function to start the Telegram bot
-async def start_bot():
-    # Create the Application instance (Updated for v20+)
-    application = Application.builder().token(TELEGRAM_API_TOKEN).build()
+    print("Bot is running...")
+    app.run_polling()
 
-    # Add message handler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Set up the webhook (ensure to replace <your-app-url> with your actual deployed URL)
-    await application.bot.set_webhook(url=f'https://aydinai.onrender.com/{TELEGRAM_API_TOKEN}')
-    
-    # Start the Flask app (to handle the webhook)
-    app.run(host="0.0.0.0", port=80)  # This should be correctly indented now
-
-# Main entry point to run the bot
-if __name__ == '__main__':
-    import asyncio
-    # Run the bot inside an asyncio event loop
-    asyncio.run(start_bot())
+if __name__ == "__main__":
+    main()
