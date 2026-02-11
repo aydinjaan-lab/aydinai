@@ -1,21 +1,20 @@
 import os
+import asyncio
 import requests
+from flask import Flask, request
 from telegram import Update
-from telegram.ext import (
-    Application,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import Application, MessageHandler, ContextTypes, filters
 
 TELEGRAM_API_TOKEN = os.getenv("TELEGRAM_API_TOKEN")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-last_chat_id = None
-last_message_id = None
+RENDER_URL = "https://aydinai.onrender.com"  # change if your URL changes
+
+app = Flask(__name__)
+telegram_app = Application.builder().token(TELEGRAM_API_TOKEN).build()
 
 
-# ===== MISTRAL API =====
+# ===== MISTRAL =====
 def query_mistral(prompt):
     url = "https://api.mistral.ai/v1/chat/completions"
 
@@ -26,60 +25,52 @@ def query_mistral(prompt):
 
     data = {
         "model": "mistral-small",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
+        "messages": [{"role": "user", "content": prompt}]
     }
 
     response = requests.post(url, headers=headers, json=data)
 
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"]
-    else:
-        return "AI error."
+
+    return "AI error."
 
 
-# ===== MESSAGE HANDLER =====
+# ===== TELEGRAM HANDLER =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global last_chat_id, last_message_id
-
     user_text = update.message.text
     reply = query_mistral(user_text)
-
-    sent = await update.message.reply_text(reply)
-
-    # Save message for editing later
-    last_chat_id = update.effective_chat.id
-    last_message_id = sent.message_id
+    await update.message.reply_text(reply)
 
 
-# ===== KEEP ALIVE JOB =====
-async def keep_alive(context: ContextTypes.DEFAULT_TYPE):
-    global last_chat_id, last_message_id
-
-    if last_chat_id and last_message_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=last_chat_id,
-                message_id=last_message_id,
-                text="🟢 AI Active\nUpdated every 5 minutes"
-            )
-        except:
-            pass
+telegram_app.add_handler(
+    MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
+)
 
 
-# ===== MAIN =====
-def main():
-    app = Application.builder().token(TELEGRAM_API_TOKEN).build()
-
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Schedule job every 5 minutes (300 seconds)
-    app.job_queue.run_repeating(keep_alive, interval=300, first=300)
-
-    print("Bot running...")
-    app.run_polling()
+# ===== WEBHOOK ROUTE =====
+@app.route(f"/{TELEGRAM_API_TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    asyncio.run(telegram_app.process_update(update))
+    return "OK", 200
 
 
+@app.route("/")
+def home():
+    return "Bot is running."
+
+
+# ===== STARTUP =====
 if __name__ == "__main__":
-    main()
+    async def setup():
+        await telegram_app.initialize()
+        await telegram_app.bot.set_webhook(
+            url=f"{RENDER_URL}/{TELEGRAM_API_TOKEN}"
+        )
+
+    asyncio.run(setup())
+
+    # IMPORTANT: Render expects PORT env variable
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
