@@ -1,17 +1,20 @@
 import os
 import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from flask import Flask, request
+from telegram import Bot, Update
 
-# ========= ENV VARIABLES =========
+# ===== ENV VARIABLES =====
 TELEGRAM_API_TOKEN = os.environ.get("TELEGRAM_API_TOKEN")
 MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
 
-# ========= MEMORY STORAGE =========
-# Stores conversation per user_id
+# ===== INIT =====
+app = Flask(__name__)
+bot = Bot(token=TELEGRAM_API_TOKEN)
+
+# ===== MEMORY STORE =====
 user_memory = {}
 
-# ========= MISTRAL CALL =========
+# ===== MISTRAL FUNCTION =====
 def ask_mistral(messages):
     url = "https://api.mistral.ai/v1/chat/completions"
 
@@ -30,46 +33,40 @@ def ask_mistral(messages):
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"]
     else:
-        return "AI error: " + response.text
+        return "AI error."
 
+# ===== WEBHOOK ROUTE =====
+@app.route(f"/{TELEGRAM_API_TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
 
-# ========= MESSAGE HANDLER =========
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    user_text = update.message.text
+    if update.message and update.message.text:
+        user_id = update.message.from_user.id
+        user_text = update.message.text
 
-    # Initialize memory for new users
-    if user_id not in user_memory:
-        user_memory[user_id] = [
-            {"role": "system", "content": "You are a helpful AI assistant with memory."}
-        ]
+        if user_id not in user_memory:
+            user_memory[user_id] = [
+                {"role": "system", "content": "You are a helpful AI assistant with memory."}
+            ]
 
-    # Add user message
-    user_memory[user_id].append({"role": "user", "content": user_text})
+        user_memory[user_id].append({"role": "user", "content": user_text})
 
-    # Limit memory to last 20 messages
-    if len(user_memory[user_id]) > 20:
-        user_memory[user_id] = user_memory[user_id][-20:]
+        if len(user_memory[user_id]) > 20:
+            user_memory[user_id] = user_memory[user_id][-20:]
 
-    # Get AI response
-    ai_reply = ask_mistral(user_memory[user_id])
+        ai_reply = ask_mistral(user_memory[user_id])
 
-    # Add AI response to memory
-    user_memory[user_id].append({"role": "assistant", "content": ai_reply})
+        user_memory[user_id].append({"role": "assistant", "content": ai_reply})
 
-    await update.message.reply_text(ai_reply)
+        bot.send_message(chat_id=update.message.chat.id, text=ai_reply)
 
+    return "OK"
 
-# ========= MAIN =========
-def main():
-    app = ApplicationBuilder().token(TELEGRAM_API_TOKEN).build()
+# ===== ROOT CHECK =====
+@app.route("/")
+def home():
+    return "Bot is running."
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("Bot running with memory...")
-
-    app.run_polling()
-
-
+# ===== START =====
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=10000)
