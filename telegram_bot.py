@@ -2,7 +2,6 @@ import os
 import requests
 from flask import Flask, request
 from telegram import Update
-from telegram import Bot
 
 # ==============================
 # ENV VARIABLES (SET IN RENDER)
@@ -14,12 +13,25 @@ MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
 # INIT
 # ==============================
 app = Flask(__name__)
-bot = Bot(token=TELEGRAM_API_TOKEN)
 
 # ==============================
-# SIMPLE MEMORY (per user)
+# MEMORY STORE (per user)
 # ==============================
 user_memory = {}
+
+# ==============================
+# SYSTEM ROLE (SAFE MULTILINE)
+# ==============================
+SYSTEM_ROLE = """You are a helpful AI assistant.
+
+Rules:
+- Every reply must be around 50 words.
+- Always be helpful and clear.
+- Use friendly emojis naturally.
+- Do not exceed 60 words.
+- Keep responses concise but informative.
+- Maintain conversation memory.
+"""
 
 # ==============================
 # MISTRAL REQUEST
@@ -51,35 +63,33 @@ def ask_mistral(messages):
 @app.route(f"/{TELEGRAM_API_TOKEN}", methods=["POST"])
 def webhook():
     try:
-        update = Update.de_json(request.get_json(force=True), bot)
+        update = Update.de_json(request.get_json(force=True), None)
 
         if update.message and update.message.text:
             user_id = update.message.from_user.id
             user_text = update.message.text
 
+            # Initialize memory
             if user_id not in user_memory:
                 user_memory[user_id] = [
-                    {"role": "system", "content": "You are a helpful AI assistant with memory. You can only reply in 50 words.You are a helpful AI assistant.
-Rules:
-- Every reply must be around 50 words.
-- Always be helpful and clear.
-- Use friendly emojis naturally.
-- Do not exceed 60 words.
-- Keep responses concise but informative.
-- Maintain conversation memory."}
+                    {"role": "system", "content": SYSTEM_ROLE}
                 ]
 
+            # Add user message
             user_memory[user_id].append({"role": "user", "content": user_text})
 
-            # keep last 20 messages only
+            # Keep only last 20 messages
             user_memory[user_id] = user_memory[user_id][-20:]
 
+            # Ask AI
             ai_reply = ask_mistral(user_memory[user_id])
 
+            # Store assistant reply
             user_memory[user_id].append({"role": "assistant", "content": ai_reply})
 
-            # IMPORTANT: use requests instead of async send_message
+            # Send message using Telegram HTTP API (sync safe)
             send_url = f"https://api.telegram.org/bot{TELEGRAM_API_TOKEN}/sendMessage"
+
             requests.post(send_url, json={
                 "chat_id": update.message.chat.id,
                 "text": ai_reply
@@ -99,7 +109,7 @@ def home():
     return "Bot is running."
 
 # ==============================
-# START
+# START (Local Only)
 # ==============================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
