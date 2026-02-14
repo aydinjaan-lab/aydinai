@@ -59,7 +59,14 @@ def webhook():
 
             if user_id not in user_memory:
                 user_memory[user_id] = [
-                    {"role": "system", "content": "You are a helpful AI assistant with memory."}
+                    {"role": "system", "content": "You are a helpful AI assistant with memory. You can only reply in 50 words.You are a helpful AI assistant.
+Rules:
+- Every reply must be around 50 words.
+- Always be helpful and clear.
+- Use friendly emojis naturally.
+- Do not exceed 60 words.
+- Keep responses concise but informative.
+- Maintain conversation memory."}
                 ]
 
             user_memory[user_id].append({"role": "user", "content": user_text})
